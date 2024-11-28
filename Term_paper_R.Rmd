@@ -1,0 +1,181 @@
+---
+title: "Urban population growth prediction"
+output:
+  word_document: default
+  html_document: default
+date: "2024-10-15"
+---
+*Urban Population Growth Forecasting using ARMA*
+
+1. Data Import and Transformation
+```{r}
+file.exists("C:\\Users\\mahak\\Downloads\\urban_pop(1986-2019).xls")
+data<- readxl::read_excel("C:\\Users\\mahak\\OneDrive\\Documents\\R-Script\\urban_pop(1986-2019).xls")
+data
+```
+```{r}
+urban_pop1<- ts(data[,2], start= 1986, end = 2019)
+urban_pop1
+```
+
+2. Visualization
+```{r}
+library(fpp2)
+autoplot(urban_pop1)+xlab("Time")+ylab("Urban population growth")+ggtitle("Urban Population Growth in India(1986-2019)")
+```
+3. Checking for Time Trend and Seasonality
+Lagplot:
+```{r}
+gglagplot(urban_pop1)
+```
+
+ACF values:
+```{r}
+acf_values <- acf(urban_pop1, lag.max=9, plot=F)
+acf_values$acf
+```
+
+Plotting the correlogram:
+```{r}
+ggAcf(urban_pop1)
+```
+4. Model Estimation
+
+not that: we are finding the best fit model using non-stationary data
+Plotting all the forecasting methods:
+
+```{r}
+autoplot(urban_pop1)+
+  autolayer(meanf(urban_pop1,h=20), series="Mean",PI=T)+
+  autolayer(naive(urban_pop1,h=20), series="Naive",PI=T)+
+  autolayer(snaive(urban_pop1,h=20), series="Seasonal naive",PI=T)+
+  autolayer(rwf(urban_pop1,h=20,drift = T), series="Drift",PI=T)
+```
+
+Plotting the residual graph:
+
+1.*Using naive method:*
+```{r}
+res<- residuals(naive(urban_pop1))
+autoplot(res)+xlab("Year")+ylab("")+ggtitle("Residuals from naive method")
+```
+
+Plotting the histogram of residuals:
+
+```{r}
+gghistogram(res)+ggtitle("Histogram of Residuals for Urban Population Growth")
+```
+
+
+```{r}
+checkresiduals(naive(urban_pop1))
+```
+
+
+
+2. *Using seasonal naive method:*
+
+```{r}
+res1<- residuals(snaive(urban_pop1))
+autoplot(res1)+xlab("Year")+ylab("")+ggtitle("Residuals from seasonal-naive method")
+```
+
+
+plotting the residual histogram:
+
+```{r}
+gghistogram(res1)+ggtitle("Histogram of residuals")
+```
+
+
+all in one graph:
+```{r}
+checkresiduals(snaive(urban_pop1))
+```
+
+
+6. Model Evaluation 
+Evaluating forecasting accuracy:
+
+
+```{r}
+urban_pop_training_data<- window(urban_pop1, end=2009) #training data
+urbanpop1<-  meanf(urban_pop_training_data, h=10)
+urbanpop2<- rwf(urban_pop_training_data, h=10)
+urbanpop3<- snaive(urban_pop_training_data, h=10)
+urbanpop4<- rwf(urban_pop_training_data, drift = T, h=10)
+
+autoplot(urban_pop1)+ #plotting all the data
+  autolayer(urbanpop1, series="Mean", PI= F)+
+  autolayer(urbanpop2, series="Naive", PI= F)+
+  autolayer(urbanpop3, series="Seasonal Naive", PI= F)+
+   autolayer(urbanpop4, series="Drift", PI= F)+
+  xlab("Year")+ylab("Urban population growth(%)")+
+  ggtitle("Forecasts for urban population growth")+
+  guides(colour= guide_legend(title="Forecast"))
+```
+
+
+Checking the accuracy:
+1.mean forecasting method:
+```{r}
+urban_pop_test_data<- window(urban_pop1, start=2010) #test data
+accuracy(urbanpop1, urban_pop_test_data)
+
+```
+2.Naive method
+```{r}
+accuracy(urbanpop2, urban_pop_test_data)
+
+```
+
+3.Seasonal naive method
+```{r}
+accuracy(urbanpop3, urban_pop_test_data)
+
+```
+
+4.Drift method
+```{r}
+accuracy(urbanpop4, urban_pop_test_data)
+```
+
+
+now, converting the non-stationary data into stationary data and then comparing the two models:
+Checking for stationarity:
+
+```{r}
+cbind("Urban population growth(%)"= urban_pop1, "Monthly log urban population growth"= log(urban_pop1), "Yearly change in log urban popn growth"= diff(log(urban_pop1),12)) %>%
+  autoplot(facets=T)+xlab("Year")+ylab("")+ggtitle("Urban population growth rate in different log transformations:")
+```
+
+
+test:
+```{r}
+library(urca)
+urban_pop1 %>% ur.kpss() %>% summary()
+```
+
+since the data is non-stationary, we need to finf the best fitted model to convert it into a stationary series.
+which model to use?
+```{r}
+summary((fit<- auto.arima(urban_pop1)))
+```
+
+We use auto.arima() to get the best fitted model. Here the best fitted model is ARIMA(0,1,0)
+Note that: The RMSE value when the data is converted to a stationary series is less than the previous RMSE value where we directly forecasted the data.
+
+now we will forecast the next 10 years:
+Forecasting:
+```{r}
+fit%>% forecast(h=10)%>% autoplot(include=20)
+```
+
+
+```{r}
+checkresiduals(fit)
+```
+
+
+
+
